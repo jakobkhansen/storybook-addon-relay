@@ -3,7 +3,6 @@ import { RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
 import { GraphQLSingularResponse, GraphQLTaggedNode, OperationDescriptor, OperationType } from 'relay-runtime';
 import { createMockEnvironment, MockPayloadGenerator } from 'relay-test-utils';
 import { MockResolvers } from 'relay-test-utils/lib/RelayMockPayloadGenerator';
-import { OperationMockResolver } from 'relay-test-utils/lib/RelayModernMockEnvironment';
 import { InferMockResolvers } from './types';
 
 export type WithRelayParameters<
@@ -26,6 +25,12 @@ export type WithRelayParameters<
      * If you use TResolver type argument, you can get type safety <3
      */
     mockResolvers?: InferMockResolvers<TResolvers>;
+
+    /**
+     * Optional. Allows toggling of whether to queue an operation resolver for the query.
+     * Setting this to false allows you to manually queue operation resolvers in the `play` function of your story.
+     */
+    enableQueuedMockResolvers?: boolean;
 
     /**
      * Optional. A function to execute instead of the default MockPayloadGenerator.generate function.
@@ -82,14 +87,18 @@ export const withRelay = makeDecorator({
 
     const environment = createMockEnvironment();
 
-    environment.mock.queueOperationResolver((operation) => {
-      if (pars.generateFunction) {
-        return pars.generateFunction(operation, mockResolvers);
-      }
-      return MockPayloadGenerator.generate(operation, mockResolvers);
-    });
+    if (pars.enableQueuedMockResolvers ?? true) {
+      environment.mock.queueOperationResolver((operation) => {
+        if (pars.generateFunction) {
+          return pars.generateFunction(operation, mockResolvers);
+        }
+        return MockPayloadGenerator.generate(operation, mockResolvers);
+      });
+    }
 
-    environment.mock.queuePendingOperation(query, variables);
+    if (query) {
+      environment.mock.queuePendingOperation(query, variables);
+    }
 
     return (
       <RelayEnvironmentProvider environment={environment}>
