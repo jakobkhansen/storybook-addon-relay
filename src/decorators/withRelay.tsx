@@ -9,17 +9,48 @@ export type WithRelayParameters<
   TQuery extends OperationType,
   TResolvers = {},
 > =
-  & {
-    /**
-     * A GraphQLTaggedNode returned by the relay's graphql`...` template literal.
-     */
-    query: GraphQLTaggedNode;
+  & (
+    | (
+      & {
+        /**
+         * A GraphQLTaggedNode returned by the relay's graphql`...` template literal.
+         */
+        query: GraphQLTaggedNode;
 
-    /**
-     * Optional. Variables to pass to the query.
-     */
-    variables?: TQuery['variables'];
-
+        /**
+         * Optional. Variables to pass to the query.
+         */
+        variables?: TQuery['variables'];
+      }
+      & (
+        /**
+         * A function that returns an entry to be added to the story's args.
+         *
+         * @param queryResult Result of the useLazyLoadQuery hook with the query passed as parameter.
+         * @returns An entry to be added to the story's args.
+         */
+        | {
+          getReferenceEntry: (
+            queryResult: TQuery['response'],
+          ) => [string, unknown];
+          getReferenceEntries?: never;
+        }
+        | {
+          getReferenceEntries: (
+            queryResult: TQuery['response'],
+          ) => Array<[string, unknown]>;
+          getReferenceEntry?: never;
+        }
+      )
+    )
+    | {
+      query?: never;
+      variables?: never;
+      getReferenceEntry?: never;
+      getReferenceEntries?: never;
+    }
+  )
+  & ({
     /**
      * Optional. Mock resolver object pass to the relay-test-utils MockPayloadGenerator.generate function.
      * If you use TResolver type argument, you can get type safety <3
@@ -30,35 +61,20 @@ export type WithRelayParameters<
      * Optional. Allows toggling of whether to queue an operation resolver for the query.
      * Setting this to false allows you to manually queue operation resolvers in the `play` function of your story.
      */
-    enableQueuedMockResolvers?: boolean;
-
+    enableQueuedMockResolvers?: true;
+  } | {
+    mockResolvers?: never;
+    enableQueuedMockResolvers?: false;
+  })
+  & {
     /**
      * Optional. A function to execute instead of the default MockPayloadGenerator.generate function.
      */
     generateFunction?: (
-        operation: OperationDescriptor,
-        mockResolvers?: MockResolvers | null,
+      operation: OperationDescriptor,
+      mockResolvers?: MockResolvers | null,
     ) => GraphQLSingularResponse;
-
-    /**
-     * A function that returns an entry to be added to the story's args.
-     *
-     * @param queryResult Result of the useLazyLoadQuery hook with the query passed as parameter.
-     * @returns An entry to be added to the story's args.
-     */
-  }
-  & (
-    | {
-      getReferenceEntry: (queryResult: TQuery['response']) => [string, unknown];
-      getReferenceEntries?: never;
-    }
-    | {
-      getReferenceEntries: (
-        queryResult: TQuery['response'],
-      ) => Array<[string, unknown]>;
-      getReferenceEntry?: never;
-    }
-  );
+  };
 
 export const withRelay = makeDecorator({
   name: 'withRelay',
@@ -76,11 +92,13 @@ export const withRelay = makeDecorator({
     }
 
     const Renderer = () => {
-      const queryResult = useLazyLoadQuery(query, variables);
-      const entries = pars.getReferenceEntries
-        ? pars.getReferenceEntries(queryResult)
-        : [pars.getReferenceEntry(queryResult)];
-      Object.assign(context.args, Object.fromEntries(entries));
+      if (query) {
+        const queryResult = useLazyLoadQuery(query, variables);
+        const entries = pars.getReferenceEntries
+          ? pars.getReferenceEntries(queryResult)
+          : [pars.getReferenceEntry(queryResult)];
+        Object.assign(context.args, Object.fromEntries(entries));
+      }
 
       return getStory(context) as any;
     };
